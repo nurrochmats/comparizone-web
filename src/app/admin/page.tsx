@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, DashboardStats } from "@/lib/api-client";
 import { StatCard } from "@/components/StatCard";
-import { Package, FolderTree, Settings2, BarChart3, LogOut, ExternalLink, Link2, Megaphone, ImageIcon } from "lucide-react";
+import { Package, FolderTree, Settings2, BarChart3, LogOut, ExternalLink, Link2, Megaphone, ImageIcon, MousePointerClick } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
 import Image from "next/image";
+import { Badge } from "@/components/ui/badge";
+import { getImageUrl, formatCurrency } from "@/lib/utils";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -53,7 +55,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-12">
       {/* Admin header */}
-      <header className="bg-white dark:bg-zinc-950 border-b sticky top-0 z-40">
+      {/* <header className="bg-white dark:bg-zinc-950 border-b sticky top-0 z-40">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-lg">
             <BarChart3 className="h-5 w-5 text-blue-600" />
@@ -68,7 +70,7 @@ export default function AdminDashboardPage() {
             </Button>
           </div>
         </div>
-      </header>
+      </header> */}
 
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">System Dashboard</h1>
@@ -93,10 +95,10 @@ export default function AdminDashboardPage() {
             description="Global specification metrics"
           />
           <StatCard
-            title="System Status"
-            value="Healthy"
-            icon={BarChart3}
-            description="API latency < 100ms"
+            title="Total Clicks"
+            value={stats.total_clicks || 0}
+            icon={MousePointerClick}
+            description="Affiliate link redirects"
           />
         </div>
 
@@ -104,12 +106,12 @@ export default function AdminDashboardPage() {
         <h2 className="text-xl font-semibold mb-4">Management</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-10">
           {[
-            { href: "/admin/categories",     icon: FolderTree, label: "Categories",      desc: "Manage product categories" },
-            { href: "/admin/products",        icon: Package,    label: "Products",         desc: "Manage product listings" },
-            { href: "/admin/attributes",      icon: Settings2,  label: "Attributes",       desc: "Manage EAV attributes" },
-            { href: "/admin/ads",             icon: Megaphone,  label: "Ad Banners",       desc: "Manage advertisement banners" },
-            { href: "/admin/affiliate-links", icon: Link2,      label: "Affiliate Links",  desc: "Manage buy links by store" },
-            { href: "/admin/product-images",  icon: ImageIcon,  label: "Product Images",   desc: "Upload & manage images" },
+            { href: "/admin/categories", icon: FolderTree, label: "Categories", desc: "Manage product categories" },
+            { href: "/admin/products", icon: Package, label: "Products", desc: "Manage product listings" },
+            { href: "/admin/attributes", icon: Settings2, label: "Attributes", desc: "Manage EAV attributes" },
+            { href: "/admin/ads", icon: Megaphone, label: "Ad Banners", desc: "Manage advertisement banners" },
+            { href: "/admin/affiliate-links", icon: Link2, label: "Affiliate Links", desc: "Manage buy links by store" },
+            { href: "/admin/product-images", icon: ImageIcon, label: "Product Images", desc: "Upload & manage images" },
           ].map(item => (
             <Link key={item.href} href={item.href}>
               <Card className="bg-white dark:bg-zinc-950 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer group">
@@ -140,6 +142,8 @@ export default function AdminDashboardPage() {
                   <TableHead>Product</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Brand</TableHead>
+                  <TableHead className="text-center">Links</TableHead>
+                  <TableHead className="text-center">Clicks</TableHead>
                   <TableHead className="text-right">Price (Min)</TableHead>
                 </TableRow>
               </TableHeader>
@@ -147,14 +151,20 @@ export default function AdminDashboardPage() {
                 {stats.latest_products.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell>
-                        <div className="relative w-10 h-10 bg-zinc-100 rounded mix-blend-multiply dark:mix-blend-normal p-1">
-                            {product.thumbnail ? (
-                                <Image src={product.thumbnail} alt={product.name} fill className="object-contain p-1" />
-                            ) : null}
-                        </div>
+                      <div className="relative w-12 h-12 bg-white dark:bg-zinc-900 border rounded-lg shadow-sm overflow-hidden flex items-center justify-center p-1">
+                        {product.thumbnail ? (
+                          <img 
+                            src={getImageUrl(product.thumbnail)} 
+                            alt={product.name} 
+                            className="w-full h-full object-contain" 
+                          />
+                        ) : (
+                          <ImageIcon className="h-4 w-4 text-zinc-300" />
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="font-medium">
-                        <Link href={`/product/${product.slug}`} className="hover:underline">{product.name}</Link>
+                      <Link href={`/product/${product.slug}`} className="hover:underline">{product.name}</Link>
                     </TableCell>
                     <TableCell>
                       <span className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 flex w-max rounded-md text-xs font-medium">
@@ -162,8 +172,16 @@ export default function AdminDashboardPage() {
                       </span>
                     </TableCell>
                     <TableCell>{product.brand || "-"}</TableCell>
-                    <TableCell className="text-right font-medium text-blue-600 dark:text-blue-400">
-                      {product.price_min ? `Rp ${product.price_min.toLocaleString('id-ID')}` : '-'}
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className="font-normal border-orange-200 text-orange-700 bg-orange-50/50">
+                        {product.affiliate_links_count || 0}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center font-bold text-blue-600">
+                      {product.clicks_count || 0}
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(product.price_min)}
                     </TableCell>
                   </TableRow>
                 ))}

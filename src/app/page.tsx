@@ -36,12 +36,12 @@ export default async function Home() {
         <div className="container mx-auto">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-bold tracking-tight">Browse Categories</h2>
-            <Button variant="ghost">
+            <Button variant="ghost" asChild>
               <Link href="/categories">View All</Link>
             </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {categories.map((category) => (
+            {categories.slice(0, 8).map((category) => (
               <CategoryCard key={category.id} category={category} />
             ))}
             {categories.length === 0 && (

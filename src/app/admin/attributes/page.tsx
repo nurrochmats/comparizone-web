@@ -8,9 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings2, ArrowLeft, Loader2, Plus, Edit2, Trash2 } from "lucide-react";
+import { Settings2, ArrowLeft, Loader2, Plus, Edit2, Trash2, Search, Filter } from "lucide-react";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Pagination } from "@/components/Pagination";
 
 // We need an interface for Attribute from the admin side (different from the public one)
 export interface AdminAttribute {
@@ -51,27 +52,59 @@ export default function AttributeManagementPage() {
   const [dataType, setDataType] = useState<'text'|'number'|'boolean'|'option'>('text');
   const [unit, setUnit] = useState("");
   const [isFilterable, setIsFilterable] = useState(true);
+  
+  // Search, Filter & Pagination
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const itemsPerPage = 10;
 
   useEffect(() => {
-    fetchData();
+    fetchCategories();
   }, []);
 
-  const fetchData = async () => {
+  const fetchCategories = async () => {
+    try {
+      const data = await api.categories.list();
+      setCategories(data);
+    } catch (err) {
+      console.error("Failed to load categories", err);
+    }
+  };
+
+  const fetchAttributes = async (page = 1, search = "", category = "all") => {
     setIsLoading(true);
     try {
       const token = getToken();
-      const [attrs, cats] = await Promise.all([
-        api.admin.attributes.list(token).then(res => res as AdminAttribute[]),
-        api.categories.list()
-      ]);
-      setAttributes(attrs);
-      setCategories(cats);
+      const params: any = { page, per_page: itemsPerPage };
+      if (search) params.search = search;
+      if (category !== "all") params.category_id = category;
+
+      const res = await api.admin.attributes.list(token, params);
+      setAttributes(res.data || []);
+      setTotalItems(res.total || 0);
+      setTotalPages(res.last_page || 0);
+      setCurrentPage(res.current_page || 1);
     } catch (err: any) {
-      setError(err.message || "Failed to load data");
+      setError(err.message || "Failed to load attributes");
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchAttributes(currentPage, searchQuery, selectedCategoryFilter);
+  }, [currentPage, selectedCategoryFilter]);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchAttributes(1, searchQuery, selectedCategoryFilter);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const getToken = () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem("admin_token") : null;
@@ -131,23 +164,14 @@ export default function AttributeManagementPage() {
       };
 
       if (editingAttr) {
-        const updated = await api.admin.attributes.update(token, editingAttr.id, payload) as AdminAttribute;
-        
-        const cat = categories.find(c => c.id === updated.category_id);
-        if(cat && !updated.category) updated.category = cat;
-        
-        setAttributes(attributes.map(a => a.id === updated.id ? updated : a));
+        await api.admin.attributes.update(token, editingAttr.id, payload);
         setSuccessMsg("Attribute updated successfully!");
       } else {
-        const created = await api.admin.attributes.create(token, payload) as AdminAttribute;
-        
-        const cat = categories.find(c => c.id === created.category_id);
-        if(cat && !created.category) created.category = cat;
-        
-        setAttributes([...attributes, created]);
+        await api.admin.attributes.create(token, payload);
         setSuccessMsg("Attribute created successfully!");
       }
       setIsDialogOpen(false);
+      fetchAttributes(currentPage, searchQuery, selectedCategoryFilter);
     } catch (err: any) {
       setError(err.message || "Failed to save attribute");
     } finally {
@@ -158,15 +182,12 @@ export default function AttributeManagementPage() {
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this attribute? This action cannot be undone.")) return;
     
-    const old = [...attributes];
-    setAttributes(attributes.filter(a => a.id !== id));
-    
     try {
       const token = getToken();
       await api.admin.attributes.delete(token, id);
       setSuccessMsg("Attribute deleted successfully!");
+      fetchAttributes(currentPage, searchQuery, selectedCategoryFilter);
     } catch (err: any) {
-      setAttributes(old);
       setError(err.message || "Failed to delete attribute");
     }
   };
@@ -198,11 +219,31 @@ export default function AttributeManagementPage() {
           </div>
         )}
 
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <h1 className="text-2xl font-bold">Attributes</h1>
-          <Button onClick={openCreateDialog}>
-            <Plus className="mr-2 h-4 w-4" /> Add Attribute
-          </Button>
+          <div className="flex flex-wrap w-full md:w-auto gap-2">
+            <div className="relative flex-grow md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <Input 
+                placeholder="Search attributes..." 
+                className="pl-10" 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="relative w-48">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+              <select 
+                value={selectedCategoryFilter}
+                onChange={e => setSelectedCategoryFilter(e.target.value)}
+                className="w-full h-10 pl-9 pr-3 rounded-md border border-zinc-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-zinc-950 dark:border-zinc-800"
+              >
+                <option value="all">All Categories</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <Button onClick={openCreateDialog} className="whitespace-nowrap"><Plus className="mr-2 h-4 w-4" /> Add Attribute</Button>
+          </div>
         </div>
 
         <Card className="bg-white dark:bg-zinc-950">
@@ -212,67 +253,77 @@ export default function AttributeManagementPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Attribute</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead>Filterable</TableHead>
-                    <TableHead className="text-center">Options</TableHead>
-                    <TableHead className="text-center">Products</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {attributes.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell>{a.category?.name || a.category_id}</TableCell>
-                      <TableCell className="font-medium">
-                        <div>{a.name}</div>
-                        <div className="text-xs text-zinc-500 font-mono">{a.code}</div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs">
-                            {a.data_type}
-                        </span>
-                      </TableCell>
-                      <TableCell>{a.unit || "-"}</TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 flex w-max rounded-md text-xs font-medium ${a.is_filterable ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'}`}>
-                            {a.is_filterable ? 'Yes' : 'No'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-2 py-0.5 rounded-full text-xs font-medium">
-                          {a.data_type === 'option' ? (a.options_count ?? 0) : '-'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-medium">
-                          {a.products_count ?? 0}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => openEditDialog(a)}>
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleDelete(a.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {attributes.length === 0 && (
+              <>
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-zinc-500">
-                        No attributes found. Click "Add Attribute" to create one.
-                      </TableCell>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Attribute</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Unit</TableHead>
+                      <TableHead>Filterable</TableHead>
+                      <TableHead className="text-center">Options</TableHead>
+                      <TableHead className="text-center">Products</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {attributes.map((a) => (
+                      <TableRow key={a.id}>
+                        <TableCell>{a.category?.name || a.category_id}</TableCell>
+                        <TableCell className="font-medium">
+                          <div>{a.name}</div>
+                          <div className="text-xs text-zinc-500 font-mono">{a.code}</div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs">
+                              {a.data_type}
+                          </span>
+                        </TableCell>
+                        <TableCell>{a.unit || "-"}</TableCell>
+                        <TableCell>
+                          <span className={`px-2 py-1 flex w-max rounded-md text-xs font-medium ${a.is_filterable ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'}`}>
+                              {a.is_filterable ? 'Yes' : 'No'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-2 py-0.5 rounded-full text-xs font-medium">
+                            {a.data_type === 'option' ? (a.options_count ?? 0) : '-'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-medium">
+                            {a.products_count ?? 0}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right space-x-2">
+                          <Button variant="outline" size="sm" onClick={() => openEditDialog(a)}>
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button variant="destructive" size="sm" onClick={() => handleDelete(a.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {attributes.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8 text-zinc-500">
+                          No attributes found.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+ 
+                <Pagination 
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </>
             )}
           </CardContent>
         </Card>

@@ -3,10 +3,11 @@
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Product } from "@/lib/api-client";
-import { Scale, Package, Image as ImageIcon } from "lucide-react";
+import { Product, api } from "@/lib/api-client";
+import { Scale, Package, Image as ImageIcon, Check } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { cn, formatCurrency, getImageUrl } from "@/lib/utils";
 
 interface ProductCardProps {
   product: Product;
@@ -24,14 +25,9 @@ export function ProductCard({ product, onCompare, isComparing = false }: Product
     
     const fetchPrimaryImage = async () => {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-        const res = await fetch(`${apiUrl}/products/${product.id}/images`, {
-          headers: { Accept: "application/json" }
-        });
+        const images = await api.products.getImages(product.id);
         
-        if (res.ok && isMounted) {
-          const data = await res.json();
-          const images = data.data || [];
+        if (isMounted) {
           const pImg = images.find((img: any) => img.is_primary === true);
           if (pImg) {
             setPrimaryImage(pImg.image_url);
@@ -50,33 +46,18 @@ export function ProductCard({ product, onCompare, isComparing = false }: Product
   }, [product.id]);
 
   const formatPrice = (price: number | null) => {
-    if (!price) return "N/A";
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      maximumFractionDigits: 0,
-    }).format(price);
+    return formatCurrency(price);
   };
 
-  const getImageUrl = (url: string | null | undefined) => {
-    if (!url) return '';
-    if (url.startsWith('http')) return url;
-
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || apiUrl.replace(/\/api$/, '').replace(/\/+$/, '');
-
-    const path = url.startsWith('/') ? url : `/storage/${url}`;
-    
-    if (url.includes('/storage/')) {
-        return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
-    }
-
-    return `${baseUrl}${path}`;
-  };
 
   return (
-    <Card className="flex flex-col h-full overflow-hidden hover:shadow-xl transition-all duration-300 bg-white dark:bg-zinc-950 border-zinc-200/50 dark:border-zinc-800/50">
-      <CardHeader className="p-0 relative aspect-square bg-gradient-to-br from-zinc-50 to-zinc-100/50 dark:from-zinc-900/50 dark:to-zinc-950 flex-shrink-0 group overflow-hidden">
+    <Card className={cn(
+      "flex flex-col h-full overflow-hidden transition-all duration-500 bg-white dark:bg-zinc-950 border-2 rounded-[2rem] group/card",
+      isComparing 
+        ? "border-blue-600 shadow-xl shadow-blue-500/20 ring-4 ring-blue-600/10 scale-[1.02]" 
+        : "border-zinc-100 dark:border-zinc-800 hover:shadow-2xl hover:shadow-blue-500/10 hover:border-blue-200"
+    )}>
+      <CardHeader className="p-0 relative aspect-square bg-zinc-50/50 dark:bg-zinc-900/20 flex-shrink-0 overflow-hidden">
         {primaryImage && !imageError ? (
           <>
             {!isImageLoaded && (
@@ -85,8 +66,8 @@ export function ProductCard({ product, onCompare, isComparing = false }: Product
             <img
               src={getImageUrl(primaryImage)}
               alt={product.name}
-              className={`absolute inset-0 w-full h-full object-contain p-6 transition-all duration-700 ease-in-out group-hover:scale-105 ${
-                isImageLoaded ? "opacity-100 blur-0" : "opacity-0 blur-sm"
+              className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ease-out group-hover/card:scale-110 ${
+                isImageLoaded ? "opacity-100 blur-0" : "opacity-0 blur-md"
               }`}
               loading="lazy"
               onLoad={() => setIsImageLoaded(true)}
@@ -104,29 +85,42 @@ export function ProductCard({ product, onCompare, isComparing = false }: Product
             <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-zinc-400/70">No Image</span>
           </div>
         )}
-        <Badge className="absolute top-3 left-3 z-10 shadow-sm font-semibold tracking-wide" variant="secondary">
-          {product.category.name}
+        
+        {isComparing && (
+          <div className="absolute top-4 right-4 z-20 bg-blue-600 text-white p-1.5 rounded-full shadow-lg animate-in zoom-in">
+            <Check className="h-4 w-4 stroke-[3]" />
+          </div>
+        )}
+
+        <Badge className="absolute top-4 left-4 z-10 shadow-lg font-bold tracking-tight bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md text-zinc-900 dark:text-white border-none" variant="outline">
+          {product.category?.name || "Tech"}
         </Badge>
       </CardHeader>
 
-      <CardContent className="flex-grow p-4">
-        <div className="text-sm text-zinc-500 mb-1">{product.brand || "Unknown Brand"}</div>
-        <h3 className="font-semibold text-lg leading-tight mb-2 line-clamp-2">
+      <CardContent className="flex-grow p-6">
+        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 dark:text-blue-500 mb-2">{product.brand || "Premium"}</div>
+        <h3 className="font-bold text-lg leading-tight mb-3 line-clamp-2 group-hover/card:text-blue-600 transition-colors">
           {product.name}
         </h3>
-        <div className="text-lg font-bold text-blue-600 dark:text-blue-400 mt-auto">
-          {formatPrice(product.price_min)}
+        <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-50 dark:border-zinc-900">
+          <div className="text-xl font-black text-zinc-950 dark:text-white">
+            {formatPrice(product.price_min)}
+          </div>
         </div>
       </CardContent>
 
-      <CardFooter className="p-4 pt-0 flex gap-2">
-        <Button variant="outline" className="flex-1">
-          <Link href={`/product/${product.slug}`}>Details</Link>
+      <CardFooter className="p-6 pt-0 flex gap-2">
+        <Button variant="default" className="flex-1 rounded-xl font-bold" asChild>
+          <Link href={`/product/${product.slug}`}>View Details</Link>
         </Button>
         {onCompare && (
           <Button
-            variant={isComparing ? "secondary" : "default"}
+            variant={isComparing ? "secondary" : "outline"}
             size="icon"
+            className={cn(
+              "rounded-xl h-10 w-10 border-2",
+              isComparing ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700" : "border-zinc-200"
+            )}
             onClick={() => onCompare(product)}
             title={isComparing ? "Remove from compare" : "Add to compare"}
           >

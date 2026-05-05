@@ -5,18 +5,20 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Megaphone, ArrowLeft, Loader2, Plus, Edit2, Trash2 } from "lucide-react";
+import { Megaphone, ArrowLeft, Loader2, Plus, Edit2, Trash2, Search } from "lucide-react";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DataTable } from "@/components/ui/data-table";
+import { cn } from "@/lib/utils";
 
 const PLACEMENTS = [
   { value: 'homepage_top', label: 'Homepage — Top' },
   { value: 'homepage_sidebar', label: 'Homepage — Sidebar' },
   { value: 'product_page', label: 'Product Page' },
   { value: 'compare_page', label: 'Compare Page' },
+  { value: 'footerads', label: 'Footer Ads' },
 ];
 
 interface Ad {
@@ -48,6 +50,13 @@ export default function AdsManagementPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isActive, setIsActive] = useState(true);
+  
+  // Search & Pagination
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const itemsPerPage = 10;
 
   const getToken = () => {
     const token = localStorage.getItem("admin_token");
@@ -55,16 +64,22 @@ export default function AdsManagementPage() {
     return token;
   };
 
-  const fetchAds = async () => {
+  const fetchAds = async (page = 1, search = "") => {
     setIsLoading(true);
     try {
       const token = getToken();
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api"}/admin/ads`,
+        `${baseUrl}/admin/ads?page=${page}&search=${search}&per_page=${itemsPerPage}`,
         { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }
       );
       const data = await res.json();
+      
+      // Laravel Pagination structure
       setAds(data.data ?? []);
+      setTotalItems(data.total ?? 0);
+      setTotalPages(data.last_page ?? 0);
+      setCurrentPage(data.current_page ?? 1);
     } catch (err: any) {
       setError(err.message || "Failed to load ads");
     } finally {
@@ -72,7 +87,17 @@ export default function AdsManagementPage() {
     }
   };
 
-  useEffect(() => { fetchAds(); }, []);
+  useEffect(() => { 
+    fetchAds(currentPage, searchQuery); 
+  }, [currentPage]);
+
+  // Handle search with reset to page 1
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchAds(1, searchQuery);
+    }, 400); // 400ms debounce
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const openCreate = () => {
     setEditingAd(null);
@@ -83,10 +108,22 @@ export default function AdsManagementPage() {
 
   const openEdit = (ad: Ad) => {
     setEditingAd(ad);
-    setTitle(ad.title); setPlacement(ad.placement); setImageUrl(ad.image_url);
-    setTargetUrl(ad.target_url); setStartDate(ad.start_date ?? ""); setEndDate(ad.end_date ?? "");
+    setTitle(ad.title); 
+    setPlacement(ad.placement); 
+    setImageUrl(ad.image_url);
+    setTargetUrl(ad.target_url);
+    
+    // Format dates to YYYY-MM-DD for <input type="date">
+    const formatDate = (dateStr: string | null) => {
+      if (!dateStr) return "";
+      return dateStr.split('T')[0];
+    };
+    
+    setStartDate(formatDate(ad.start_date)); 
+    setEndDate(formatDate(ad.end_date));
     setIsActive(ad.is_active);
-    setError(null); setIsDialogOpen(true);
+    setError(null); 
+    setIsDialogOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,24 +141,36 @@ export default function AdsManagementPage() {
         { method: editingAd ? "PUT" : "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(payload) }
       );
       if (!res.ok) { const d = await res.json(); throw new Error(d.message || "Failed to save"); }
-      const saved = (await res.json()).data;
-      if (editingAd) setAds(ads.map(a => a.id === saved.id ? saved : a));
-      else setAds([saved, ...ads]);
+      
       setSuccessMsg(editingAd ? "Ad updated!" : "Ad created!");
       setIsDialogOpen(false);
+      fetchAds(currentPage, searchQuery); // Refetch current page
     } catch (err: any) { setError(err.message); }
     finally { setIsSubmitting(false); }
   };
-
   const handleDelete = async (id: number) => {
-    if (!confirm("Delete this ad?")) return;
-    const old = [...ads]; setAds(ads.filter(a => a.id !== id));
+    if (!confirm("Are you sure you want to delete this ad?")) return;
     try {
       const token = getToken();
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api"}/admin/ads/${id}`,
-        { method: "DELETE", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
+      const res = await fetch(`${baseUrl}/admin/ads/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
+      });
+      if (!res.ok) throw new Error("Failed to delete ad");
       setSuccessMsg("Ad deleted!");
-    } catch (err: any) { setAds(old); setError(err.message); }
+      fetchAds(currentPage, searchQuery);
+    } catch (err: any) { setError(err.message); }
+  };
+
+  const formatDateDisplay = (dateStr: string | null) => {
+    if (!dateStr) return "—";
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: '2-digit'
+    }).replace(/ /g, '-');
   };
 
   return (
@@ -135,43 +184,96 @@ export default function AdsManagementPage() {
       <div className="container mx-auto px-4 py-8">
         {error && !isDialogOpen && <div className="mb-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-md">{error}</div>}
         {successMsg && !isDialogOpen && <div className="mb-4 p-4 bg-green-50 text-green-600 border border-green-200 rounded-md">{successMsg}</div>}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <h1 className="text-2xl font-bold">Ad Banners</h1>
-          <Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" /> Add Ad</Button>
+          <div className="flex w-full md:w-auto gap-2">
+            <div className="relative flex-grow md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <Input 
+                placeholder="Search ads..." 
+                className="pl-10" 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <Button onClick={openCreate} className="whitespace-nowrap"><Plus className="mr-2 h-4 w-4" /> Add Ad</Button>
+          </div>
         </div>
-        <Card className="bg-white dark:bg-zinc-950">
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="flex justify-center p-24"><Loader2 className="h-8 w-8 animate-spin text-zinc-400" /></div>
-            ) : (
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>Title</TableHead><TableHead>Placement</TableHead>
-                  <TableHead>Date Range</TableHead><TableHead>Active</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {ads.map(ad => (
-                    <TableRow key={ad.id}>
-                      <TableCell className="font-medium">
-                        <div>{ad.title}</div>
-                        <a href={ad.target_url} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline truncate block max-w-[250px]">{ad.target_url}</a>
-                      </TableCell>
-                      <TableCell><span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-1 rounded text-xs">{PLACEMENTS.find(p => p.value === ad.placement)?.label ?? ad.placement}</span></TableCell>
-                      <TableCell className="text-xs text-zinc-500">{ad.start_date ?? "—"} → {ad.end_date ?? "—"}</TableCell>
-                      <TableCell><span className={`px-2 py-1 text-xs rounded font-medium ${ad.is_active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>{ad.is_active ? "Active" : "Inactive"}</span></TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => openEdit(ad)}><Edit2 className="h-4 w-4" /></Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleDelete(ad.id)}><Trash2 className="h-4 w-4" /></Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {ads.length === 0 && (<TableRow><TableCell colSpan={5} className="text-center py-8 text-zinc-500">No ads yet. Click "Add Ad" to create one.</TableCell></TableRow>)}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        <DataTable 
+          data={ads}
+          isLoading={isLoading}
+          columns={[
+            {
+              header: "Title",
+              cell: (ad) => (
+                <div className="py-1">
+                  <div className="font-bold text-zinc-900 dark:text-zinc-100">{ad.title}</div>
+                  <a 
+                    href={ad.target_url} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="text-xs text-blue-500 hover:underline truncate block max-w-[250px] font-medium"
+                  >
+                    {ad.target_url}
+                  </a>
+                </div>
+              )
+            },
+            {
+              header: "Placement",
+              cell: (ad) => (
+                <span className="inline-flex items-center bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-blue-100 dark:border-blue-900/50">
+                  {PLACEMENTS.find(p => p.value === ad.placement)?.label ?? ad.placement}
+                </span>
+              )
+            },
+            {
+              header: "Date Range",
+              cell: (ad) => (
+                <div className="text-xs font-medium text-zinc-500 flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded">{formatDateDisplay(ad.start_date)}</span>
+                  <span className="text-zinc-300">→</span>
+                  <span className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded">{formatDateDisplay(ad.end_date)}</span>
+                </div>
+              )
+            },
+            {
+              header: "Status",
+              cell: (ad) => (
+                <span className={cn(
+                  "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                  ad.is_active 
+                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" 
+                    : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                )}>
+                  <span className={cn("w-1.5 h-1.5 rounded-full mr-1.5", ad.is_active ? "bg-emerald-500" : "bg-zinc-400")} />
+                  {ad.is_active ? "Active" : "Inactive"}
+                </span>
+              )
+            },
+            {
+              header: "Actions",
+              className: "text-right",
+              cell: (ad) => (
+                <div className="flex justify-end gap-1">
+                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900" onClick={() => openEdit(ad)}>
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={() => handleDelete(ad.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )
+            }
+          ]}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          emptyMessage="No advertisements found matching your search."
+        />
+
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ImageIcon, ArrowLeft, Loader2, Plus, Trash2, Star } from "lucide-react";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import Image from "next/image";
+import { getImageUrl } from "@/lib/utils";
 
 interface ProductImage {
   id: number;
@@ -33,8 +33,6 @@ export default function ProductImagesPage() {
   const [makePrimary, setMakePrimary] = useState(false);
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
 
-  const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
-
   const getToken = () => {
     const token = localStorage.getItem("admin_token");
     if (!token) { router.push("/login"); throw new Error("Unauthorized"); }
@@ -50,9 +48,8 @@ export default function ProductImagesPage() {
     setSelectedProductId(productId);
     setImages([]);
     try {
-      const res = await fetch(`${BASE_URL}/products/${productId}/images`, { headers: { Accept: "application/json" } });
-      const data = await res.json();
-      setImages(data.data ?? []);
+      const res = await api.products.getImages(productId);
+      setImages(res || []);
     } catch (err: any) { setError("Failed to load images"); }
     finally { setIsLoading(false); }
   };
@@ -66,6 +63,8 @@ export default function ProductImagesPage() {
     formData.append("is_primary", makePrimary ? "1" : "0");
     try {
       const token = getToken();
+      // Using direct fetch for FormData upload as api-client might not handle FormData yet for this specific endpoint
+      const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
       const res = await fetch(`${BASE_URL}/products/${selectedProductId}/images`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -82,15 +81,13 @@ export default function ProductImagesPage() {
 
   const setPrimary = async (image: ProductImage) => {
     if (!selectedProductId) return;
-    const token = getToken();
-    const res = await fetch(`${BASE_URL}/products/${selectedProductId}/images/${image.id}`, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ is_primary: true })
-    });
-    if (res.ok) {
+    try {
+      const token = getToken();
+      await api.admin.images.update(token, selectedProductId, image.id, { is_primary: true });
       setImages(imgs => imgs.map(i => ({ ...i, is_primary: i.id === image.id })));
       setSuccessMsg("Primary image updated!");
+    } catch (err: any) {
+      setError(err.message || "Failed to set primary image");
     }
   };
 
@@ -99,9 +96,7 @@ export default function ProductImagesPage() {
     const old = [...images]; setImages(images.filter(i => i.id !== image.id));
     try {
       const token = getToken();
-      await fetch(`${BASE_URL}/products/${selectedProductId}/images/${image.id}`, {
-        method: "DELETE", headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.admin.images.delete(token, selectedProductId, image.id);
       setSuccessMsg("Image deleted!");
     } catch (err: any) { setImages(old); setError(err.message); }
   };
@@ -154,7 +149,7 @@ export default function ProductImagesPage() {
                         </div>
                       ) : (
                         <img
-                          src={img.image_url.startsWith('http') ? img.image_url : `${BASE_URL.replace('/api', '')}${img.image_url}`}
+                          src={getImageUrl(img.image_url)}
                           alt="product image"
                           className="object-contain p-2 absolute inset-0 w-full h-full"
                           onError={() => setImageErrors(prev => ({ ...prev, [img.id]: true }))}

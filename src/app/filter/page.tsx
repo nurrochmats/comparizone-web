@@ -97,28 +97,22 @@ function FilterPageContent() {
   };
 
   const toggleCompare = (product: Product) => {
-    const exists = compareIds.includes(product.id);
-    let newIds: number[];
+    // To allow comparing different SKUs of the same product, 
+    // we now allow duplicate product IDs in the compare list.
+    // If the product is already in the list, we add another instance of it 
+    // unless the limit (5) is reached.
     
-    if (exists) {
-      newIds = compareIds.filter(id => id !== product.id);
-    } else {
-      if (compareIds.length >= 5) {
-        alert("You can only compare up to 5 products at once.");
-        return;
-      }
-      newIds = [...compareIds, product.id];
+    if (compareIds.length >= 5) {
+      alert("You can only compare up to 5 items at once.");
+      return;
     }
-    
+
+    const newIds = [...compareIds, product.id];
     setCompareIds(newIds);
     
-    // Update URL silently outside of state updater to prevent component rendering conflicts
+    // Update URL
     const url = new URL(window.location.href);
-    if (newIds.length > 0) {
-      url.searchParams.set('compare', newIds.join(','));
-    } else {
-      url.searchParams.delete('compare');
-    }
+    url.searchParams.set('compare', newIds.join(','));
     window.history.replaceState({}, '', url.toString());
   };
 
@@ -128,21 +122,42 @@ function FilterPageContent() {
     <div className="container mx-auto px-4 py-8">
       {/* Compare Floating Bar */}
       {compareIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white rounded-full shadow-2xl px-6 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-5">
-          <div className="flex items-center gap-2 font-medium">
-            <Scale className="h-5 w-5" />
-            {compareIds.length} selected for comparison
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-zinc-900 border-2 border-blue-600 rounded-2xl shadow-2xl px-6 py-4 flex items-center gap-6 animate-in slide-in-from-bottom-5">
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2 font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tighter italic">
+              <Scale className="h-5 w-5 text-blue-600" />
+              {compareIds.length} <span className="text-blue-600">Items</span> Ready
+            </div>
+            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
+              Compare different SKUs side-by-side
+            </div>
           </div>
-          <Button 
-            variant="secondary" 
-            size="sm" 
-            className="rounded-full font-bold ml-4 text-blue-700 block"
-            disabled={compareIds.length < 2}
-            onClick={() => router.push(`/compare?products=${compareIds.join(',')}`)}
-          >
-              Compare Now {compareIds.length < 2 ? '(Min 2)' : ''}
-              <ArrowRight className="h-4 w-4 ml-2 inline" />
-          </Button>
+          
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 font-bold text-xs"
+              onClick={() => {
+                setCompareIds([]);
+                const url = new URL(window.location.href);
+                url.searchParams.delete('compare');
+                window.history.replaceState({}, '', url.toString());
+              }}
+            >
+              Reset
+            </Button>
+            <Button 
+              variant="default" 
+              size="sm" 
+              className="rounded-xl font-black uppercase tracking-widest text-[10px] px-6 h-10 bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20"
+              disabled={compareIds.length < 2}
+              onClick={() => router.push(`/compare?products=${compareIds.join(',')}`)}
+            >
+              Compare Now
+              <ArrowRight className="h-3 w-3 ml-2 stroke-[3]" />
+            </Button>
+          </div>
         </div>
       )}
 

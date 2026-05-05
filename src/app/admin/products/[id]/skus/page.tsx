@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Package, ArrowLeft, Loader2, Plus, Edit2, Trash2, SlidersHorizontal, Settings2, Link as LinkIcon, Save } from "lucide-react";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { formatCurrency } from "@/lib/utils";
 
 export default function SkuManagementPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -54,10 +55,10 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
     try {
       const token = getToken();
       // Temporarily use products.list because we don't have a single product backend route that doesn't use slugs
-      const productList = await api.products.list(); 
+      const productList = await api.products.list();
       const foundProduct = productList.find(p => p.id === productId);
       if (!foundProduct) throw new Error("Product not found");
-      
+
       setProduct(foundProduct);
 
       const fetchedSkus = await api.admin.skus.list(token, productId);
@@ -134,10 +135,10 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
 
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this variant? It will orphan all related affiliate links and attributes!")) return;
-    
+
     const old = [...skus];
     setSkus(skus.filter(s => s.id !== id));
-    
+
     try {
       const token = getToken();
       await api.admin.skus.delete(token, id);
@@ -157,17 +158,17 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
     setError(null);
     setSuccessMsg(null);
     setIsAttrsDialogOpen(true);
-    
+
     try {
       const token = getToken();
       // Load standard category attributes
       const attrs = await api.admin.attributes.list(token, product.category_id || product.category?.id);
       setCategoryAttributes(attrs as any[]);
-      
+
       // Load specific ProductAttributeValues
       const valuesRes = await api.admin.productAttributeValues.list(token, productId);
       const valuesMap: Record<number, any> = {};
-      
+
       (valuesRes as any[]).forEach(v => {
         // Load only the attribute values that correspond to THIS sku_id
         if (v.sku_id === s.id) {
@@ -175,7 +176,7 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
         }
       });
       setProductValues(valuesMap);
-    } catch(err: any) {
+    } catch (err: any) {
       setError(err.message || "Failed to load attributes");
     }
   };
@@ -192,12 +193,12 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
   };
 
   const saveProductAttributes = async () => {
-    if(!selectedSkuForAttrs || !product) return;
+    if (!selectedSkuForAttrs || !product) return;
     setIsSavingAttrs(true);
     setError(null);
     try {
       const token = getToken();
-      
+
       const promises = Object.values(productValues).map(async val => {
         const payload = {
           attribute_id: val.attribute_id,
@@ -207,29 +208,29 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
           value_boolean: val.value_boolean ?? null,
           value_option_id: val.value_option_id ?? null,
         };
-        
+
         const hasValue = payload.value_text !== null || payload.value_number !== null || payload.value_boolean !== null || payload.value_option_id !== null;
-        
+
         if (val.id) {
-            if (!hasValue) {
-               return api.admin.productAttributeValues.delete(token, productId, val.id);
-            }
-            return api.admin.productAttributeValues.update(token, productId, val.id, payload);
+          if (!hasValue) {
+            return api.admin.productAttributeValues.delete(token, productId, val.id);
+          }
+          return api.admin.productAttributeValues.update(token, productId, val.id, payload);
         } else if (hasValue) {
-            return api.admin.productAttributeValues.create(token, productId, payload);
+          return api.admin.productAttributeValues.create(token, productId, payload);
         }
       });
-      
+
       await Promise.all(promises);
       setSuccessMsg(`Attributes saved for ${selectedSkuForAttrs.name} successfully!`);
       setIsAttrsDialogOpen(false);
-    } catch(err: any) {
+    } catch (err: any) {
       setError(err.message || "Failed to save attributes");
     } finally {
       setIsSavingAttrs(false);
     }
   };
-  
+
   // --- Matrix Specs Logic ---
   const openMatrixDialog = async () => {
     if (!product) return;
@@ -248,7 +249,7 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
 
       // 2. Fetch ALL product attribute values for this product
       const valuesRes = await api.admin.productAttributeValues.list(token, productId);
-      
+
       // 3. Map values to Matrix [attribute_id][sku_id_or_base]
       const matrix: Record<number, Record<string, any>> = {};
       (valuesRes as any[]).forEach(v => {
@@ -269,7 +270,7 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
     setMatrixValues(prev => {
       const currentAttr = prev[attrId] || {};
       const currentCol = currentAttr[colKey] || { attribute_id: attrId, sku_id: colKey === "base" ? null : parseInt(colKey) };
-      
+
       return {
         ...prev,
         [attrId]: {
@@ -285,7 +286,7 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
 
   const renderMatrixCell = (attr: any, colKey: string) => {
     const val = matrixValues[attr.id]?.[colKey] || { attribute_id: attr.id, sku_id: colKey === "base" ? null : parseInt(colKey), value_text: null, value_number: null, value_boolean: null, value_option_id: null };
-    
+
     if (attr.data_type === 'boolean') {
       return (
         <select className="w-full h-9 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:bg-zinc-950 dark:border-zinc-800"
@@ -297,7 +298,7 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
         </select>
       );
     }
-    
+
     if (attr.data_type === 'option') {
       return (
         <select className="w-full h-9 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:bg-zinc-950 dark:border-zinc-800"
@@ -310,36 +311,36 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
         </select>
       );
     }
-    
+
     if (attr.data_type === 'number') {
       return (
         <div className="flex flex-col gap-1.5">
-          <Input 
-            type="number" 
-            step="any" 
+          <Input
+            type="number"
+            step="any"
             placeholder="Value"
             className="h-8 text-xs px-2"
-            value={val.value_number ?? ""} 
-            onChange={e => handleMatrixValueChange(attr.id, colKey, 'value_number', e.target.value === "" ? null : Number(e.target.value))} 
+            value={val.value_number ?? ""}
+            onChange={e => handleMatrixValueChange(attr.id, colKey, 'value_number', e.target.value === "" ? null : Number(e.target.value))}
           />
-          <Input 
-            type="text" 
+          <Input
+            type="text"
             placeholder="Mod (DDR5...)"
             className="h-7 text-[10px] px-2 bg-blue-50/50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900 italic"
-            value={val.value_text ?? ""} 
-            onChange={e => handleMatrixValueChange(attr.id, colKey, 'value_text', e.target.value || null)} 
+            value={val.value_text ?? ""}
+            onChange={e => handleMatrixValueChange(attr.id, colKey, 'value_text', e.target.value || null)}
           />
         </div>
       );
     }
-    
+
     return (
-      <Input 
-        type="text" 
+      <Input
+        type="text"
         className="h-9 text-xs px-2"
         placeholder="e.g. OLED"
-        value={val.value_text ?? ""} 
-        onChange={e => handleMatrixValueChange(attr.id, colKey, 'value_text', e.target.value || null)} 
+        value={val.value_text ?? ""}
+        onChange={e => handleMatrixValueChange(attr.id, colKey, 'value_text', e.target.value || null)}
       />
     );
   };
@@ -433,55 +434,170 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
 
-        <Card className="bg-white dark:bg-zinc-950">
+        <Card className="bg-white dark:bg-zinc-950 overflow-hidden">
           <CardContent className="p-0">
             {isLoading ? (
               <div className="flex justify-center items-center p-24">
                 <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>SKU Code</TableHead>
-                    <TableHead>Config Name</TableHead>
-                    <TableHead>Override Base Price</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                {/* Desktop Table View - Hidden on LG and smaller to prevent horizontal scrolling */}
+                <div className="hidden lg:block overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-zinc-50 dark:bg-zinc-900/50">
+                      <TableRow>
+                        <TableHead className="w-[200px]">SKU Code</TableHead>
+                        <TableHead>Configuration Name</TableHead>
+                        <TableHead>Override Base Price</TableHead>
+                        <TableHead className="w-[120px]">Status</TableHead>
+                        <TableHead className="text-right w-[150px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {skus.map((s) => (
+                        <TableRow key={s.id} className="group/row">
+                          <TableCell className="font-mono text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded text-zinc-600 dark:text-zinc-400">
+                                {s.sku_code}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-bold text-zinc-900 dark:text-zinc-100">{s.name}</TableCell>
+                          <TableCell>
+                            {s.base_price ? (
+                              <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                                {formatCurrency(s.base_price)}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-400 italic text-sm">Inherited from Product</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              s.is_active 
+                                ? "bg-green-100/50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200/50 dark:border-green-800/50" 
+                                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border border-zinc-200 dark:border-zinc-700"
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${s.is_active ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" : "bg-zinc-400"}`} />
+                              {s.is_active ? "Active" : "Draft"}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right space-x-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0 opacity-0 group-hover/row:opacity-100 transition-opacity"
+                              onClick={() => openEditDialog(s)}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover/row:opacity-100 transition-opacity"
+                              onClick={() => handleDelete(s.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Tablet & Mobile Card View - Triggered on LG (1024px) and smaller to ensure no scrolling */}
+                <div className="lg:hidden space-y-4 p-4 bg-zinc-50/30 dark:bg-zinc-900/10">
                   {skus.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="font-mono text-sm">{s.sku_code}</TableCell>
-                      <TableCell className="font-medium">{s.name}</TableCell>
-                      <TableCell>{s.base_price ? `Rp ${s.base_price.toLocaleString('id-ID')}` : <span className="text-zinc-400 italic">Inherited</span>}</TableCell>
-                      <TableCell>{s.is_active ? <span className="text-green-600">Active</span> : <span className="text-red-500">Draft</span>}</TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => openAttrsDialog(s)} title="Override Specifications for this SKU">
-                          <SlidersHorizontal className="h-4 w-4 text-blue-600" />
-                        </Button>
-                        <Button variant="outline" size="sm" title="Manage External Links for this SKU">
-                          <LinkIcon className="h-4 w-4 text-orange-500" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => openEditDialog(s)}>
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleDelete(s.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                    <div 
+                      key={s.id} 
+                      className="group/card bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden"
+                    >
+                      <div className="p-6">
+                        <div className="flex justify-between items-start mb-6">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg px-2.5 py-1 border border-zinc-200/50 dark:border-zinc-700/50">
+                                <span className="font-mono text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                                  {s.sku_code}
+                                </span>
+                              </div>
+                              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.1em] ${
+                                s.is_active 
+                                  ? "bg-green-100/50 dark:bg-green-900/30 text-green-600 dark:text-green-400" 
+                                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${s.is_active ? "bg-green-500 animate-pulse" : "bg-zinc-400"}`} />
+                                {s.is_active ? "Active" : "Draft"}
+                              </div>
+                            </div>
+                            <h3 className="font-black text-xl text-zinc-900 dark:text-white leading-none pt-1">
+                              {s.name}
+                            </h3>
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="secondary" 
+                              size="icon" 
+                              className="h-10 w-10 rounded-2xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
+                              onClick={() => openEditDialog(s)}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="secondary" 
+                              size="icon" 
+                              className="h-10 w-10 rounded-2xl bg-red-50 hover:bg-red-100 dark:bg-red-900/10 dark:hover:bg-red-900/20 text-red-500 transition-colors"
+                              onClick={() => handleDelete(s.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="relative group/info p-4 rounded-[1.25rem] bg-zinc-50/80 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800 transition-colors hover:border-indigo-200 dark:hover:border-indigo-900/50">
+                            <div className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase font-black tracking-[0.2em] mb-2 flex items-center gap-2">
+                              <div className="w-1 h-3 bg-indigo-500 rounded-full" />
+                              Base Pricing
+                            </div>
+                            <div className="text-base font-black text-zinc-900 dark:text-white">
+                              {s.base_price ? (
+                                <span className="text-indigo-600 dark:text-indigo-400">{formatCurrency(s.base_price)}</span>
+                              ) : (
+                                <span className="text-zinc-400 font-medium italic opacity-60 italic text-xs">Inherited from Product</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="p-4 rounded-[1.25rem] bg-zinc-50/80 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800 flex flex-col justify-center">
+                            <div className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase font-black tracking-[0.2em] mb-2 flex items-center gap-2">
+                              <div className="w-1 h-3 bg-zinc-300 dark:bg-zinc-700 rounded-full" />
+                              System Info
+                            </div>
+                            <div className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
+                              <Package className="h-3 w-3 opacity-40" />
+                              ID: #{s.id}
+                              <span className="mx-1 opacity-20">|</span>
+                              Managed SKU
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                  {skus.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-zinc-500">
-                        No SKUs defined. This product will rely entirely on base attributes. Click "Add Variant" to split variants (e.g. 8GB vs 12GB).
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                </div>
+
+                {skus.length === 0 && (
+                  <div className="text-center py-12 px-4 text-zinc-500">
+                    <Package className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                    <p className="text-sm">No SKUs defined for this product.</p>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -527,61 +643,88 @@ export default function SkuManagementPage({ params }: { params: Promise<{ id: st
         <DialogContent className="sm:max-w-[95vw] lg:max-w-[1200px] h-[90vh] flex flex-col p-0 overflow-hidden">
           <DialogHeader className="p-6 border-b">
             <DialogTitle className="flex items-center gap-2">
-               <SlidersHorizontal className="h-5 w-5 text-blue-600" />
-               Specifications Matrix: {product?.name}
+              <SlidersHorizontal className="h-5 w-5 text-blue-600" />
+              Specifications Matrix: {product?.name}
             </DialogTitle>
           </DialogHeader>
-          
-          <div className="flex-grow overflow-auto p-0">
-             {isLoading ? (
-               <div className="flex flex-col items-center justify-center h-full p-12 text-zinc-500">
-                  <Loader2 className="h-8 w-8 animate-spin mb-4" />
-                  <span>Preparing matrix view...</span>
-               </div>
-             ) : (
-               <div className="p-0">
-                <Table className="border-collapse border-separate border-spacing-0 min-w-full">
-                  <TableHeader className="bg-zinc-50 dark:bg-zinc-900 sticky top-0 z-20">
-                    <TableRow>
-                      <TableHead className="w-[200px] sticky left-0 z-30 bg-zinc-50 dark:bg-zinc-900 border-b border-r shadow-[1px_0_0_0_#e4e4e7] dark:shadow-[1px_0_0_0_#27272a]">
-                        Attribute
-                      </TableHead>
-                      <TableHead className="w-[250px] min-w-[200px] border-b text-center bg-blue-50/30 dark:bg-blue-900/10 font-bold text-blue-700 dark:text-blue-400">
-                        BASE SPECS
-                        <div className="text-[10px] font-normal uppercase opacity-60">Global default</div>
-                      </TableHead>
-                      {skus.map(s => (
-                        <TableHead key={s.id} className="w-[250px] min-w-[200px] border-b text-center px-4 font-bold border-l">
-                          {s.name}
-                          <div className="text-[10px] font-mono font-normal opacity-60">{s.sku_code}</div>
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categoryAttributes.map((attr, idx) => (
-                      <TableRow key={attr.id} className={idx % 2 === 0 ? "bg-white dark:bg-zinc-950" : "bg-zinc-50/30 dark:bg-zinc-900/10"}>
-                        <TableCell className="font-semibold text-sm sticky left-0 z-10 bg-inherit border-r shadow-[1px_0_0_0_#e4e4e7] dark:shadow-[1px_0_0_0_#27272a]">
-                          {attr.name} {attr.unit && <span className="text-xs font-normal text-zinc-500 block">({attr.unit})</span>}
-                        </TableCell>
-                        
-                        {/* BASE COLUMN */}
-                        <TableCell className="p-2 border-b bg-blue-50/10 dark:bg-blue-900/5">
-                           {renderMatrixCell(attr, "base")}
-                        </TableCell>
 
-                        {/* SKU COLUMNS */}
+          <div className="flex-grow overflow-auto">
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center h-full p-8 text-zinc-500">
+                <Loader2 className="h-6 w-6 animate-spin mb-3" />
+                <span className="text-sm">Preparing matrix view...</span>
+              </div>
+            ) : (
+              <div className="px-4 py-3"> {/* ✅ NEW CONTAINER */}
+                <div className="rounded-lg border bg-white dark:bg-zinc-950 overflow-hidden">
+
+                  <Table className="border-separate border-spacing-0 min-w-full text-sm">
+
+                    <TableHeader className="bg-zinc-50 dark:bg-zinc-900 sticky top-0 z-20">
+                      <TableRow className="hover:bg-transparent">
+
+                        {/* ATTRIBUTE */}
+                        <TableHead className="w-[180px] sticky left-0 z-30 bg-zinc-50 dark:bg-zinc-900 border-b border-r shadow-[1px_0_0_0_#e4e4e7] dark:shadow-[1px_0_0_0_#27272a] h-12 px-3">
+                          Attribute
+                        </TableHead>
+
+                        {/* ❌ BASE SPECS REMOVED */}
+
+                        {/* SKU */}
                         {skus.map(s => (
-                          <TableCell key={s.id} className="p-2 border-b border-l">
-                            {renderMatrixCell(attr, s.id.toString())}
-                          </TableCell>
+                          <TableHead
+                            key={s.id}
+                            className="w-[200px] min-w-[180px] border-b text-center px-3 font-semibold border-l"
+                          >
+                            {s.name}
+                            <div className="text-[10px] font-mono opacity-60">
+                              {s.sku_code}
+                            </div>
+                          </TableHead>
                         ))}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-               </div>
-             )}
+                    </TableHeader>
+
+                    <TableBody>
+                      {categoryAttributes.map((attr, idx) => (
+                        <TableRow
+                          key={attr.id}
+                          className={
+                            idx % 2 === 0
+                              ? "bg-white dark:bg-zinc-950"
+                              : "bg-zinc-50/30 dark:bg-zinc-900/10"
+                          }
+                        >
+                          {/* ATTRIBUTE */}
+                          <TableCell className="font-medium text-xs sticky left-0 z-10 bg-inherit border-r px-3 py-2 shadow-[1px_0_0_0_#e4e4e7] dark:shadow-[1px_0_0_0_#27272a]">
+                            {attr.name}
+                            {attr.unit && (
+                              <span className="text-[10px] text-zinc-500 block">
+                                ({attr.unit})
+                              </span>
+                            )}
+                          </TableCell>
+
+                          {/* ❌ BASE COLUMN REMOVED */}
+
+                          {/* SKU CELLS */}
+                          {skus.map(s => (
+                            <TableCell
+                              key={s.id}
+                              className="px-2 py-2 border-b border-l"
+                            >
+                              {renderMatrixCell(attr, s.id.toString())}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+
+                  </Table>
+
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="p-6 border-t bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between sm:justify-between">

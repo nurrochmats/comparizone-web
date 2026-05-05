@@ -5,9 +5,11 @@ import { ProductDetail, Attribute } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Scale, ChevronLeft, Check, X, ImageIcon, ShoppingCart } from "lucide-react";
+import { Scale, ChevronLeft, ChevronRight, Check, X, ImageIcon, ShoppingCart } from "lucide-react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency, getImageUrl } from "@/lib/utils";
+import { useEffect } from "react";
+import { trackEvent } from "@/lib/visitor-tracker";
 
 interface Props {
   product: ProductDetail;
@@ -23,21 +25,37 @@ export function ProductDetailClient({ product, images, primaryImage, baseUrl }: 
     product.skus && product.skus.length > 0 ? product.skus[0].id : null
   );
 
-  const getImageUrl = (url: string | null | undefined) => {
-    if (!url) return '';
-    if (url.startsWith('http')) return url;
-    const path = url.startsWith('/') ? url : `/storage/${url}`;
-    if (url.includes('/storage/')) return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
-    return `${baseUrl}${path}`;
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // Initialize carousel with primary image index if possible
+  useEffect(() => {
+    if (images && images.length > 0 && primaryImage) {
+      const pIdx = images.findIndex(img => img.image_url === primaryImage);
+      if (pIdx !== -1) setCurrentImageIndex(pIdx);
+    }
+  }, [primaryImage, images]);
+
+  const nextImage = () => {
+    if (!images || images.length === 0) return;
+    setCurrentImageIndex((prev) => (prev + 1) % images.length);
   };
 
+  const prevImage = () => {
+    if (!images || images.length === 0) return;
+    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+
+  useEffect(() => {
+    trackEvent('product_view', {
+      product_id: product.id,
+      product_name: product.name,
+      category_id: product.category.id
+    }, product.name);
+  }, [product.id, product.name, product.category.id]);
+
+
   const formatPrice = (price: number | null) => {
-    if (!price) return "N/A";
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      maximumFractionDigits: 0,
-    }).format(price);
+    return formatCurrency(price);
   };
 
   const renderValue = (val: string | number | boolean | null, unit: string | null, modifier?: string | null) => {
@@ -60,7 +78,7 @@ export function ProductDetailClient({ product, images, primaryImage, baseUrl }: 
 
   // ── Compute Active Data ──
   const activeSku = activeSkuId ? product.skus?.find(s => s.id === activeSkuId) : null;
-  
+
   // Display Price
   let displayPrice = "";
   if (activeSku && activeSku.base_price) {
@@ -84,8 +102,8 @@ export function ProductDetailClient({ product, images, primaryImage, baseUrl }: 
   }
 
   // Display Links: Use SKU links if present, otherwise fallback to base links
-  let activeLinks = activeSku?.affiliate_links && activeSku.affiliate_links.length > 0 
-    ? activeSku.affiliate_links 
+  let activeLinks = activeSku?.affiliate_links && activeSku.affiliate_links.length > 0
+    ? activeSku.affiliate_links
     : (product.affiliate_links || []);
 
   return (
@@ -106,16 +124,48 @@ export function ProductDetailClient({ product, images, primaryImage, baseUrl }: 
         {/* Left Column - Image & Quick Specs */}
         <div className="md:col-span-1 space-y-6">
           <Card className="overflow-hidden bg-white dark:bg-zinc-950 border-zinc-200/50 dark:border-zinc-800/50">
-            <div className="aspect-square relative flex flex-col items-center justify-center bg-gradient-to-br from-zinc-50 to-zinc-100/30 dark:from-zinc-900/30 dark:to-zinc-950 border-b border-zinc-100 dark:border-zinc-900 mix-blend-multiply dark:mix-blend-normal">
-              {primaryImage ? (
-                <img 
-                  src={getImageUrl(primaryImage)} 
-                  alt={product.name} 
-                  className="absolute inset-0 w-full h-full object-contain p-8 drop-shadow-sm transition-transform hover:scale-105 duration-500" 
+            <div className="aspect-square relative group bg-gradient-to-br from-zinc-50 to-zinc-100/30 dark:from-zinc-900/30 dark:to-zinc-950 border-b border-zinc-100 dark:border-zinc-900">
+              {images && images.length > 0 ? (
+                <>
+                  <img
+                    src={getImageUrl(images[currentImageIndex].image_url)}
+                    alt={`${product.name} - image ${currentImageIndex + 1}`}
+                    className="absolute inset-0 w-full h-full object-contain p-8 drop-shadow-sm transition-opacity duration-500"
+                    loading="lazy"
+                  />
+
+                  {/* Carousel Controls */}
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        onClick={prevImage}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-zinc-900 dark:text-zinc-100 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white dark:hover:bg-zinc-900 shadow-lg z-10"
+                      >
+                        <ChevronLeft className="h-6 w-6" />
+                      </button>
+                      <button
+                        onClick={nextImage}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-zinc-900 dark:text-zinc-100 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white dark:hover:bg-zinc-900 shadow-lg z-10"
+                      >
+                        <ChevronRight className="h-6 w-6" />
+                      </button>
+
+                      {/* Image Counter */}
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 bg-black/50 backdrop-blur-md rounded-full text-[10px] font-bold text-white tracking-widest uppercase">
+                        {currentImageIndex + 1} / {images.length}
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : primaryImage ? (
+                <img
+                  src={getImageUrl(primaryImage)}
+                  alt={product.name}
+                  className="absolute inset-0 w-full h-full object-contain p-8 drop-shadow-sm"
                   loading="lazy"
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center text-zinc-400">
+                <div className="flex flex-col items-center justify-center text-zinc-400 w-full h-full">
                   <div className="p-6 rounded-full bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 mb-4">
                     <ImageIcon className="h-10 w-10 text-zinc-300 dark:text-zinc-600" strokeWidth={1} />
                   </div>
@@ -123,13 +173,35 @@ export function ProductDetailClient({ product, images, primaryImage, baseUrl }: 
                 </div>
               )}
             </div>
+
+            {/* Thumbnails Gallery */}
+            {images && images.length > 1 && (
+              <div className="px-6 py-4 flex gap-2 overflow-x-auto no-scrollbar border-b border-zinc-100 dark:border-zinc-900 bg-white/50 dark:bg-zinc-950/50">
+                {images.map((img, idx) => (
+                  <button
+                    key={img.id}
+                    onClick={() => setCurrentImageIndex(idx)}
+                    className={cn(
+                      "relative w-16 h-16 rounded-xl border-2 transition-all flex-shrink-0 overflow-hidden bg-zinc-50 dark:bg-zinc-900",
+                      currentImageIndex === idx
+                        ? "border-blue-600 ring-4 ring-blue-600/10"
+                        : "border-transparent opacity-60 hover:opacity-100"
+                    )}
+                  >
+                    <img
+                      src={getImageUrl(img.image_url)}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
             <CardContent className="p-6">
-              <Badge className="mb-4 bg-zinc-950 dark:bg-zinc-50">{product.category.name}</Badge>
               <div className="text-sm font-semibold tracking-wider text-zinc-500 uppercase mb-1">
                 {product.brand}
               </div>
               <h1 className="text-2xl font-bold leading-tight mb-2">{product.name}</h1>
-              {activeSku && <div className="text-sm font-medium text-zinc-500 mb-4 font-mono">{activeSku.sku_code}</div>}
 
               {/* Price Display */}
               <div className="text-3xl font-extrabold text-blue-600 dark:text-blue-500 mb-6 border-t pt-4">
@@ -232,15 +304,7 @@ export function ProductDetailClient({ product, images, primaryImage, baseUrl }: 
                     <div className="text-2xl font-black text-zinc-950 dark:text-white">
                       {link.price ? formatPrice(link.price) : "Check Price"}
                     </div>
-                    <Link
-                      href={link.affiliate_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 text-sm font-black uppercase tracking-widest rounded-2xl hover:bg-blue-600 dark:hover:bg-blue-400 hover:text-white transition-all shadow-lg active:scale-95 w-full md:w-auto"
-                    >
-                      <ShoppingCart className="h-4 w-4" />
-                      Buy Now
-                    </Link>
+                    <BuyNowLink link={link} productName={product.name} productId={product.id} />
                   </div>
                 </div>
               ))}
@@ -249,5 +313,25 @@ export function ProductDetailClient({ product, images, primaryImage, baseUrl }: 
         </div>
       )}
     </div>
+  );
+}
+
+function BuyNowLink({ link, productName, productId }: { link: any, productName: string, productId: number }) {
+  return (
+    <Link
+      href={link.affiliate_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => trackEvent('click', {
+        link_id: link.id,
+        product_id: productId,
+        store: link.store_name,
+        sku_id: link.sku_id
+      }, `Click ${link.store_name} - ${productName}`)}
+      className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 text-sm font-black uppercase tracking-widest rounded-2xl hover:bg-blue-600 dark:hover:bg-blue-400 hover:text-white transition-all shadow-lg active:scale-95 w-full md:w-auto"
+    >
+      <ShoppingCart className="h-4 w-4" />
+      Buy Now
+    </Link>
   );
 }

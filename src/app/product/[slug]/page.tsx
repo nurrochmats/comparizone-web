@@ -21,19 +21,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || apiUrl.replace(/\/api$/, '').replace(/\/+$/, '');
 
   // Explicitly fetch images as requested
-  const imagesRes = product ? await fetch(`${apiUrl}/products/${product.id}/images`, { 
-    headers: { Accept: "application/json" },
-    next: { revalidate: 3600 } 
-  }).catch(() => null) : null;
-  
-  let images = [];
-  if (imagesRes && imagesRes.ok) {
-    const data = await imagesRes.json();
-    images = data.data || [];
-  }
+  const images = product ? await api.products.getImages(product.id).catch(() => []) : [];
 
   // Find primary image from images array (is_primary === true) or fallback to thumbnail
-  const primaryImage = images.find((img: any) => img.is_primary === true)?.image_url || product?.thumbnail;
+  const primaryImage = images.find((img: any) => img.is_primary === true)?.image_url || product?.thumbnail || "";
 
   return (
     <ProductDetailClient 

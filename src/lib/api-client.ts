@@ -51,6 +51,7 @@ export interface Product {
   category: Category;
   affiliate_links_count?: number;
   images_count?: number;
+  clicks_count?: number;
 }
 
 export interface Attribute {
@@ -81,6 +82,12 @@ export interface AffiliateLink {
   price: number | null;
   image_url: string | null;
   commission_note: string | null;
+  sku_id?: number | null;
+  is_active: boolean;
+  product?: {
+    id: number;
+    name: string;
+  };
 }
 
 export interface ProductDetail extends Product {
@@ -98,12 +105,14 @@ export interface DashboardStats {
   total_products: number;
   total_categories: number;
   total_attributes: number;
+  total_clicks: number;
   latest_products: Product[];
 }
 
 export const api = {
   categories: {
     list: () => apiClient('/categories').then((res) => res.data as Category[]),
+    nav: () => apiClient('/categories/nav').then((res) => res.data as { name: string; href: string }[]),
   },
   products: {
     list: (params?: Record<string, string>) => {
@@ -111,6 +120,7 @@ export const api = {
       return apiClient('/products' + qs).then((res) => res.data as Product[]);
     },
     get: (slug: string) => apiClient(`/products/${slug}`).then((res) => res.data as ProductDetail),
+    getImages: (productId: number) => apiClient(`/products/${productId}/images`).then((res) => res.data as { id: number; product_id: number; image_url: string; is_primary: boolean; sort_order: number; }[]),
   },
   filter: {
     apply: (category: string, filters: any[], search?: string, sort?: string) =>
@@ -132,6 +142,10 @@ export const api = {
         headers: { Authorization: `Bearer ${token}` },
       }).then((res) => res.data as DashboardStats),
     categories: {
+      list: (token: string, params?: Record<string, any>) => {
+        const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+        return apiClient('/admin/categories' + qs, { headers: { Authorization: `Bearer ${token}` } });
+      },
       create: (token: string, data: Partial<Category>) =>
         apiClient('/categories', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(data) }).then(res => res.data as Category),
       update: (token: string, id: number, data: Partial<Category>) =>
@@ -140,6 +154,10 @@ export const api = {
         apiClient(`/categories/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
     },
     products: {
+      list: (token: string, params?: Record<string, any>) => {
+        const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+        return apiClient('/admin/products' + qs, { headers: { Authorization: `Bearer ${token}` } });
+      },
       create: (token: string, data: any) =>
         apiClient('/products', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(data) }).then(res => res.data as Product),
       update: (token: string, id: number, data: any) =>
@@ -148,8 +166,10 @@ export const api = {
         apiClient(`/products/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
     },
     attributes: {
-      list: (token: string, categoryId?: number) =>
-        apiClient(categoryId ? `/attributes?category_id=${categoryId}` : '/attributes', { headers: { Authorization: `Bearer ${token}` } }),
+      list: (token: string, params?: Record<string, any>) => {
+        const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+        return apiClient('/attributes' + qs, { headers: { Authorization: `Bearer ${token}` } });
+      },
       create: (token: string, data: any) =>
         apiClient('/attributes', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(data) }),
       update: (token: string, id: number, data: any) =>
@@ -176,6 +196,26 @@ export const api = {
         apiClient(`/products/${productId}/attribute-values/${valueId}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(data) }),
       delete: (token: string, productId: number, valueId: number) =>
         apiClient(`/products/${productId}/attribute-values/${valueId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
+    },
+    affiliateLinks: {
+      list: (token: string, params?: Record<string, any>) => {
+        const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+        return apiClient('/admin/affiliate-links' + qs, { headers: { Authorization: `Bearer ${token}` } });
+      },
+      listByProduct: (token: string, productId: number) =>
+        apiClient(`/products/${productId}/affiliate-links`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.data as AffiliateLink[]),
+      create: (token: string, productId: number, data: any) =>
+        apiClient(`/products/${productId}/affiliate-links`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(data) }).then(res => res.data as AffiliateLink),
+      update: (token: string, id: number, data: any) =>
+        apiClient(`/affiliate-links/${id}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(data) }).then(res => res.data as AffiliateLink),
+      delete: (token: string, id: number) =>
+        apiClient(`/affiliate-links/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
+    },
+    images: {
+      update: (token: string, productId: number, imageId: number, data: any) =>
+        apiClient(`/products/${productId}/images/${imageId}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(data) }),
+      delete: (token: string, productId: number, imageId: number) =>
+        apiClient(`/products/${productId}/images/${imageId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
     }
   },
 };

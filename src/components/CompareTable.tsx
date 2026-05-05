@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card } from "@/components/ui/card";
 import { Check, X, Package, Image as ImageIcon } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 interface CompareTableProps {
   products: ProductDetail[];
@@ -46,9 +46,9 @@ export function CompareTable({ products }: CompareTableProps) {
     setActiveSkus(prev => {
       const newActive: Record<number, number | null> = { ...prev };
       let changed = false;
-      products.forEach(p => {
-        if (newActive[p.id] === undefined) {
-           newActive[p.id] = (p.skus && p.skus.length > 0) ? p.skus[0].id : null;
+      products.forEach((p, idx) => {
+        if (newActive[idx] === undefined) {
+           newActive[idx] = (p.skus && p.skus.length > 0) ? p.skus[0].id : null;
            changed = true;
         }
       });
@@ -57,18 +57,13 @@ export function CompareTable({ products }: CompareTableProps) {
   }, [products]);
 
   const formatPrice = (price: number | null) => {
-    if (!price) return "N/A";
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      maximumFractionDigits: 0,
-    }).format(price);
+    return formatCurrency(price);
   };
 
   const displayData = useMemo(() => {
     const data: Record<number, { mergedSpecs: Record<string, Attribute>, displayPrice: string, activeLinks: any[], activeSku: any }> = {};
-    products.forEach(p => {
-      const activeSkuId = activeSkus[p.id];
+    products.forEach((p, idx) => {
+      const activeSkuId = activeSkus[idx];
       const activeSku = activeSkuId ? p.skus?.find((s: any) => s.id === activeSkuId) : null;
       
       const mergedSpecs: Record<string, Attribute> = { ...(p.attributes || {}) };
@@ -92,7 +87,7 @@ export function CompareTable({ products }: CompareTableProps) {
         ? activeSku.affiliate_links 
         : (p.affiliate_links || []);
         
-      data[p.id] = { mergedSpecs, displayPrice, activeLinks, activeSku };
+      data[idx] = { mergedSpecs, displayPrice, activeLinks, activeSku };
     });
     return data;
   }, [products, activeSkus]);
@@ -100,15 +95,15 @@ export function CompareTable({ products }: CompareTableProps) {
   // Collect all unique attribute codes from all products
   const allAttributeCodes = useMemo(() => {
     return Array.from(
-      new Set(products.flatMap(p => Object.keys(displayData[p.id]?.mergedSpecs || {})))
+      new Set(products.flatMap((p, idx) => Object.keys(displayData[idx]?.mergedSpecs || {})))
     );
   }, [products, displayData]);
 
   // Group attributes by their name for the table rows
   const attributeRows = useMemo(() => {
     return allAttributeCodes.map(code => {
-      for (const p of products) {
-        const attrDef = displayData[p.id]?.mergedSpecs?.[code];
+      for (let i = 0; i < products.length; i++) {
+        const attrDef = displayData[i]?.mergedSpecs?.[code];
         if (attrDef) {
           return {
             code,
@@ -158,96 +153,99 @@ export function CompareTable({ products }: CompareTableProps) {
   };
 
   return (
-    <Card className="overflow-x-auto bg-white dark:bg-zinc-950">
-      <Table className="min-w-[800px]">
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead className="w-[200px] min-w-[200px] align-bottom pb-6 z-10 sticky left-0 bg-white dark:bg-zinc-950 border-r shadow-[2px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_10px_-4px_rgba(0,0,0,0.5)]">
-              <div className="text-2xl font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight">Compare<br />Products</div>
-            </TableHead>
-            {products.map(product => {
-              const displayImage = imageUrls[product.id] || product.thumbnail;
-              const hasError = imageErrors[product.id];
-              const loaded = isImageLoaded[product.id];
-              const pData = displayData[product.id];
+    <Card className="overflow-hidden bg-white dark:bg-zinc-950 border-2 border-zinc-100 dark:border-zinc-800 rounded-[2.5rem] shadow-xl">
+      <div className="overflow-x-auto custom-scrollbar">
+        <Table className="min-w-full table-fixed border-collapse">
+          <TableHeader>
+            <TableRow className="hover:bg-transparent border-none">
+              <TableHead className="w-[180px] md:w-[220px] align-bottom pb-10 z-30 sticky left-0 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-r-2 border-zinc-100 dark:border-zinc-800 shadow-[4px_0_24px_-4px_rgba(0,0,0,0.05)] dark:shadow-[4px_0_24px_-4px_rgba(0,0,0,0.3)]">
+                <div className="text-3xl font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tighter leading-none italic">
+                  Compare<br /><span className="text-blue-600">Specs</span>
+                </div>
+              </TableHead>
+              {products.map((product, idx) => {
+                const displayImage = imageUrls[product.id] || product.thumbnail;
+                const hasError = imageErrors[product.id];
+                const loaded = isImageLoaded[product.id];
+                const pData = displayData[idx];
 
-              return (
-                <TableHead key={product.id} className="min-w-[250px] align-top px-6 py-6 border-l group h-full">
-                  <div className="flex flex-col h-full bg-white dark:bg-zinc-950">
-                    <div className="aspect-square relative flex items-center justify-center bg-gradient-to-br from-zinc-50 to-zinc-100/30 dark:from-zinc-900/40 dark:to-zinc-950 rounded-2xl border border-zinc-100 dark:border-zinc-800/80 mb-4 p-4 overflow-hidden mix-blend-multiply dark:mix-blend-normal">
-                      {displayImage && !hasError ? (
-                        <img 
-                          src={getImageUrl(displayImage)} 
-                          alt={product.name} 
-                          className={cn("max-w-full max-h-full object-contain transition-all duration-500 group-hover:scale-105 drop-shadow-sm", !loaded ? "opacity-0 scale-95" : "opacity-100 scale-100")} 
-                          loading="lazy"
-                          onLoad={() => setIsImageLoaded(prev => ({ ...prev, [product.id]: true }))}
-                          onError={() => setImageErrors(prev => ({ ...prev, [product.id]: true }))}
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center text-zinc-400">
-                          <Package className="h-10 w-10 mb-2 opacity-50" strokeWidth={1.5} />
-                          <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">No Image</span>
+                return (
+                  <TableHead key={`${product.id}-${idx}`} className="w-[280px] min-w-[280px] align-top px-8 py-10 border-l border-zinc-100 dark:border-zinc-800 group transition-colors hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30">
+                    <div className="flex flex-col h-full">
+                      <div className="w-full aspect-square relative flex items-center justify-center bg-white dark:bg-zinc-900 rounded-[2rem] border-2 border-zinc-100 dark:border-zinc-800 mb-6 overflow-hidden shadow-sm group-hover:shadow-xl group-hover:border-blue-200 dark:group-hover:border-blue-900/50 transition-all duration-500">
+                        {displayImage && !hasError ? (
+                          <img 
+                            src={getImageUrl(displayImage)} 
+                            alt={product.name} 
+                            className={cn("absolute inset-0 w-full h-full object-cover transition-all duration-700 ease-out group-hover:scale-110", !loaded ? "opacity-0 scale-95" : "opacity-100 scale-100")} 
+                            loading="lazy"
+                            onLoad={() => setIsImageLoaded(prev => ({ ...prev, [product.id]: true }))}
+                            onError={() => setImageErrors(prev => ({ ...prev, [product.id]: true }))}
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-zinc-400">
+                            <Package className="h-10 w-10 mb-2 opacity-30" strokeWidth={1} />
+                            <span className="text-[10px] font-black uppercase tracking-widest opacity-30">No Image</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-blue-600 dark:text-blue-400 font-black uppercase tracking-[0.2em] mb-2">{product.brand}</div>
+                      <div className="font-bold text-lg text-zinc-950 dark:text-zinc-50 leading-tight mb-4 line-clamp-2 h-14 group-hover:text-blue-600 transition-colors">{product.name}</div>
+                      
+                      {/* Variant Selector */}
+                      {product.skus && product.skus.length > 0 && (
+                        <div className="mb-6">
+                          <select 
+                            className="w-full text-xs font-bold border-2 border-zinc-100 dark:border-zinc-800 rounded-xl p-3 bg-zinc-50 dark:bg-zinc-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center cursor-pointer hover:border-zinc-300 dark:hover:border-zinc-700 transition-all appearance-none"
+                            value={activeSkus[idx] || ""}
+                            onChange={(e) => {
+                               setActiveSkus(prev => ({ ...prev, [idx]: parseInt(e.target.value) || null }));
+                            }}
+                          >
+                            {product.skus.map((sku: any) => (
+                              <option key={sku.id} value={sku.id}>{sku.name}</option>
+                            ))}
+                          </select>
                         </div>
                       )}
-                    </div>
-                    <div className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-1">{product.brand}</div>
-                    <div className="font-bold text-base text-zinc-900 dark:text-zinc-100 leading-tight mb-2 line-clamp-2">{product.name}</div>
-                    
-                    {/* Variant Selector */}
-                    {product.skus && product.skus.length > 0 && (
-                      <div className="mt-2 mb-3 w-full">
-                        <select 
-                          className="w-full text-sm font-medium border-2 border-zinc-200 dark:border-zinc-800 rounded-lg p-2 bg-zinc-50 dark:bg-zinc-900 focus:ring-0 focus:border-blue-500 text-center cursor-pointer hover:border-zinc-300 transition-colors"
-                          value={activeSkus[product.id] || ""}
-                          onChange={(e) => {
-                             setActiveSkus(prev => ({ ...prev, [product.id]: parseInt(e.target.value) || null }));
-                          }}
-                        >
-                          {product.skus.map((sku: any) => (
-                            <option key={sku.id} value={sku.id}>{sku.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
 
-                    <div className="text-blue-600 dark:text-blue-400 font-bold mt-auto pt-2 border-t w-full">
-                      {pData?.displayPrice}
+                      <div className="text-2xl font-black text-zinc-950 dark:text-white mt-auto pt-6 border-t border-zinc-100 dark:border-zinc-900">
+                        {pData?.displayPrice}
+                      </div>
                     </div>
-                  </div>
-                </TableHead>
-              );
-            })}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {attributeRows.map((rowStyle, idx) => (
-            <TableRow key={rowStyle.code} className={cn("hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 transition-colors", idx % 2 === 0 ? "bg-zinc-50/30 dark:bg-zinc-900/20" : "")}>
-              <TableCell className="font-semibold text-zinc-600 dark:text-zinc-400 py-4 z-10 sticky left-0 bg-white/95 backdrop-blur-sm dark:bg-zinc-950/95 border-r shadow-[2px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_10px_-4px_rgba(0,0,0,0.5)]">
-                {rowStyle.name}
-              </TableCell>
-              {products.map(product => {
-                const attr = displayData[product.id]?.mergedSpecs?.[rowStyle.code];
-                return (
-                  <TableCell key={`${product.id}-${rowStyle.code}`} className="text-center py-4 border-l">
-                    {renderValue(attr?.value, attr?.unit, attr?.modifier)}
-                  </TableCell>
+                  </TableHead>
                 );
               })}
             </TableRow>
-          ))}
+          </TableHeader>
+          <TableBody>
+            {attributeRows.map((rowStyle, idx) => (
+              <TableRow key={rowStyle.code} className={cn("hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-colors border-none", idx % 2 === 0 ? "bg-zinc-50/40 dark:bg-zinc-900/10" : "")}>
+                <TableCell className="font-black text-[10px] uppercase tracking-[0.15em] text-zinc-500 dark:text-zinc-400 py-6 px-6 z-20 sticky left-0 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-r-2 border-zinc-100 dark:border-zinc-800 shadow-[4px_0_24px_-4px_rgba(0,0,0,0.05)] dark:shadow-[4px_0_24px_-4px_rgba(0,0,0,0.3)]">
+                  {rowStyle.name}
+                </TableCell>
+                {products.map((product, pIdx) => {
+                  const attr = displayData[pIdx]?.mergedSpecs?.[rowStyle.code];
+                  return (
+                    <TableCell key={`${pIdx}-${rowStyle.code}`} className="text-center py-6 px-8 border-l border-zinc-50 dark:border-zinc-900/50">
+                      {renderValue(attr?.value, attr?.unit, attr?.modifier)}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            ))}
 
-          {/* Affiliate Links Row */}
-          <TableRow className="hover:bg-transparent">
-            <TableHead className="w-[200px] min-w-[200px] align-top pt-8 pb-6 z-10 sticky left-0 bg-white dark:bg-zinc-950 border-r shadow-[2px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_10px_-4px_rgba(0,0,0,0.5)]">
-              <div className="text-lg font-black text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
-                Where to Buy
-              </div>
-            </TableHead>
-            {products.map(product => {
-              const links = displayData[product.id]?.activeLinks || [];
-              const activeSku = displayData[product.id]?.activeSku;
+            {/* Affiliate Links Row */}
+            <TableRow className="hover:bg-transparent border-none">
+              <TableHead className="w-[180px] md:w-[220px] align-top pt-12 pb-10 z-20 sticky left-0 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-r-2 border-zinc-100 dark:border-zinc-800 shadow-[4px_0_24px_-4px_rgba(0,0,0,0.05)] dark:shadow-[4px_0_24px_-4px_rgba(0,0,0,0.3)]">
+                <div className="text-xl font-black text-zinc-900 dark:text-zinc-100 flex items-center gap-3 uppercase tracking-tighter italic">
+                  <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
+                  Best Deals
+                </div>
+              </TableHead>
+            {products.map((product, pIdx) => {
+              const links = displayData[pIdx]?.activeLinks || [];
+              const activeSku = displayData[pIdx]?.activeSku;
               
               return (
                 <TableCell key={`affiliate-${product.id}`} className="p-6 border-l align-top shadow-inner bg-zinc-50/30 dark:bg-zinc-900/20">
@@ -302,7 +300,8 @@ export function CompareTable({ products }: CompareTableProps) {
           </TableRow>
 
         </TableBody>
-      </Table>
+        </Table>
+      </div>
     </Card>
   );
 }

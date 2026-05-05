@@ -1,0 +1,36 @@
+﻿
+   INFO  Preparing database.  
+
+  Creating migration table  22.08ms DONE
+
+   INFO  Running migrations.  
+
+  0001_01_01_000000_create_users_table  34.02ms DONE
+  0001_01_01_000001_create_cache_table  31.71ms DONE
+  0001_01_01_000002_create_jobs_table  40.60ms DONE
+  2026_03_11_005509_create_personal_access_tokens_table  15.40ms DONE
+  2026_03_11_031526_add_role_to_users_table  1.74ms DONE
+  2026_03_11_090000_create_schemas  1.85ms DONE
+  2026_03_11_090001_create_core_categories_table  105.16ms FAIL
+
+   Illuminate\Database\QueryException 
+
+  SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "categories" already exists (Connection: pgsql, Host: 127.0.0.1, Port: 5432, Database: db_web_compare, SQL: create table "core"."categories" ("id" bigserial not null primary key, "name" varchar(100) not null, "slug" varchar(100) not null, "description" text null, "is_active" boolean not null default '1', "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null))
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+    834Γûò             $exceptionType = $this->isUniqueConstraintError($e)
+    835Γûò                 ? UniqueConstraintViolationException::class
+    836Γûò                 : QueryException::class;
+    837Γûò 
+  Γ₧£ 838Γûò             throw new $exceptionType(
+    839Γûò                 $this->getNameWithReadWriteType(),
+    840Γûò                 $query,
+    841Γûò                 $this->prepareBindings($bindings),
+    842Γûò                 $e,
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connection.php:584
+      PDOException::("SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "categories" already exists")
+
+  2   vendor\laravel\framework\src\Illuminate\Database\Connection.php:584
+      PDOStatement::execute()
+

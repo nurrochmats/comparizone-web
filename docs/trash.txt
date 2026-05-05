@@ -1,0 +1,169 @@
+deploy postgrel ke hosting
+https://chatgpt.com/c/69f39c45-2300-8320-b151-cae3e7d823ed
+
+--
+
+Desain sistem tracking sendiri (Laravel + Next.js)
+A. Struktur Event (core idea)
+
+Jangan buat tabel khusus “page_views”, “product_views”, dll.
+
+👉 Gunakan 1 tabel fleksibel: events
+
+Migration:
+Schema::create('events', function (Blueprint $table) {
+    $table->id();
+    $table->uuid('visitor_id');
+    $table->string('event_type'); // page_view, product_view, click
+    $table->string('event_name')->nullable(); // optional detail
+    $table->json('metadata')->nullable(); // flexible data
+    $table->timestamp('created_at')->useCurrent();
+});
+B. Contoh event
+Page view:
+{
+  "event_type": "page_view",
+  "metadata": {
+    "url": "/products",
+    "title": "Product Page"
+  }
+}
+Product view:
+{
+  "event_type": "product_view",
+  "metadata": {
+    "product_id": 123,
+    "product_name": "Sepatu A"
+  }
+}
+Click:
+{
+  "event_type": "click",
+  "metadata": {
+    "element": "buy_button",
+    "product_id": 123
+  }
+}
+C. Generate visitor_id (Next.js)
+import { v4 as uuidv4 } from 'uuid';
+
+export function getVisitorId() {
+  let id = localStorage.getItem('visitor_id');
+
+  if (!id) {
+    id = uuidv4();
+    localStorage.setItem('visitor_id', id);
+  }
+
+  return id;
+}
+D. Kirim event ke backend
+await fetch('/api/events', {
+  method: 'POST',
+  body: JSON.stringify({
+    visitor_id: getVisitorId(),
+    event_type: 'product_view',
+    metadata: {
+      product_id: 123
+    }
+  })
+});
+E. Endpoint Laravel
+public function store(Request $request)
+{
+    \DB::table('events')->insert([
+        'visitor_id' => $request->visitor_id,
+        'event_type' => $request->event_type,
+        'metadata' => json_encode($request->metadata),
+        'created_at' => now(),
+    ]);
+
+    return response()->json(['status' => 'ok']);
+}
+5. Query insight (ini bagian penting)
+A. Halaman paling sering dikunjungi
+SELECT 
+    metadata->>'url' as url,
+    COUNT(*) as total
+FROM events
+WHERE event_type = 'page_view'
+GROUP BY url
+ORDER BY total DESC
+LIMIT 10;
+B. Produk paling populer
+SELECT 
+    metadata->>'product_id' as product_id,
+    COUNT(*) as views
+FROM events
+WHERE event_type = 'product_view'
+GROUP BY product_id
+ORDER BY views DESC;
+C. Produk paling “menarik” (lebih meaningful)
+
+👉 Gabungkan view + click
+
+SELECT 
+    metadata->>'product_id' as product_id,
+    COUNT(*) FILTER (WHERE event_type = 'product_view') as views,
+    COUNT(*) FILTER (WHERE event_type = 'click') as clicks
+FROM events
+GROUP BY product_id;
+
+👉 Dari sini kamu bisa hitung:
+
+CTR (Click Through Rate)
+conversion
+6. Kontra-argumen & risiko
+❗ Masalah utama custom tracking:
+Data cepat membengkak (jutaan row)
+Query bisa jadi lambat
+Bot & spam belum difilter
+Solusi:
+Gunakan queue (Laravel Queue)
+Simpan ke:
+PostgreSQL (long-term)
+Redis (real-time counter)
+Tambahkan:
+rate limit
+user-agent filtering
+
+---
+
+
+
+PROBLEM:
+- "start_date" and "end_date" fields are not being saved or updated correctly.
+
+GOALS:
+1. Fix form handling so both fields:
+   - Persist correctly to the database on create
+   - Update correctly on edit
+2. Ensure proper:
+   - State management (React state / form handling)
+   - Data formatting (ISO date / backend-compatible format)
+   - Validation (required fields, logical date range)
+3. Improve UX if necessary:
+   - Date picker usability
+   - Clear error feedback
+
+ADDITIONAL REQUIREMENT:
+- Add new ad placement type: "footerads"
+
+---
+
+FEATURE 2: Footer Ads (Dynamic Data)
+
+PROBLEM:
+- Footer ads are currently hardcoded (e.g., const ADS = [...])
+
+GOALS:
+1. Replace static ADS constant with dynamic data from database Ad Model
+2. Only fetch ads where:
+   - placement = "footerads"
+   - current date is within start_date and end_date
+3. Implement:
+   - Server-side data fetching (recommended: Server Component / route handler)
+   - Clean separation between data layer and UI
+4. Ensure:
+   - Fallback UI if no ads available
+   - Loading state (if applicable)

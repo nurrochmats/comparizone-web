@@ -1,0 +1,35 @@
+
+   INFO  Nothing to migrate.  
+
+   INFO  Seeding database.  
+
+  Database\Seeders\UserSeeder  RUNNING  
+  Database\Seeders\UserSeeder  473 ms DONE  
+
+  Database\Seeders\CategorySeeder  RUNNING  
+
+   Illuminate\Database\QueryException 
+
+  SQLSTATE[42P01]: Undefined table: 7 ERROR:  relation "core.categories" does not exist
+LINE 1: select * from "core"."categories" where ("slug" = $1) limit ...
+                      ^ (Connection: pgsql, Host: 127.0.0.1, Port: 5432, Database: db_web_compare, SQL: select * from "core"."categories" where ("slug" = smartphone) limit 1)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+    834▕             $exceptionType = $this->isUniqueConstraintError($e)
+    835▕                 ? UniqueConstraintViolationException::class
+    836▕                 : QueryException::class;
+    837▕ 
+  ➜ 838▕             throw new $exceptionType(
+    839▕                 $this->getNameWithReadWriteType(),
+    840▕                 $query,
+    841▕                 $this->prepareBindings($bindings),
+    842▕                 $e,
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connection.php:425
+      PDOException::("SQLSTATE[42P01]: Undefined table: 7 ERROR:  relation "core.categories" does not exist
+LINE 1: select * from "core"."categories" where ("slug" = $1) limit ...
+                      ^")
+
+  2   vendor\laravel\framework\src\Illuminate\Database\Connection.php:425
+      PDOStatement::execute()
+

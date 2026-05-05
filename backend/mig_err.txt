@@ -1,0 +1,26 @@
+
+   INFO  Running migrations.  
+
+  2026_03_11_090001_create_core_categories_table  22.92ms FAIL
+
+   Illuminate\Database\QueryException 
+
+  SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "categories" already exists (Connection: pgsql, Host: 127.0.0.1, Port: 5432, Database: db_web_compare, SQL: create table "core"."categories" ("id" bigserial not null primary key, "name" varchar(100) not null, "slug" varchar(100) not null, "description" text null, "is_active" boolean not null default '1', "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null))
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+    834▕             $exceptionType = $this->isUniqueConstraintError($e)
+    835▕                 ? UniqueConstraintViolationException::class
+    836▕                 : QueryException::class;
+    837▕ 
+  ➜ 838▕             throw new $exceptionType(
+    839▕                 $this->getNameWithReadWriteType(),
+    840▕                 $query,
+    841▕                 $this->prepareBindings($bindings),
+    842▕                 $e,
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connection.php:584
+      PDOException::("SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "categories" already exists")
+
+  2   vendor\laravel\framework\src\Illuminate\Database\Connection.php:584
+      PDOStatement::execute()
+
